@@ -1,64 +1,101 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import Link from "next/link";
+import { useAuth } from "@/app/context/AuthContext";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface Poem {
   id: string;
   text: string;
   author: string;
-  created_at: string;
+  user_id: string;
+  likes: number;
 }
 
 export default function HomePage() {
+  const { user } = useAuth();
   const [poems, setPoems] = useState<Poem[]>([]);
-  const [author, setAuthor] = useState("");
+  const [savedPoems, setSavedPoems] = useState<string[]>([]); // 🔹 Store saved poem IDs
   const [text, setText] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
+  // Fetch all poems
   useEffect(() => {
     const fetchPoems = async () => {
       try {
         const res = await fetch("/api/poems");
-        if (!res.ok) throw new Error("Failed to fetch poems");
-        
         const data = await res.json();
+        console.log("📜 Fetched Poems:", data);
         setPoems(data);
-      } catch (err) {
-        console.error("Error fetching poems:", err);
-        setError("Failed to load poems.");
+      } catch (error) {
+        console.error("❌ Error fetching poems:", error);
       }
     };
     fetchPoems();
   }, []);
 
-  const handlePostPoem = async () => {
-    if (!author.trim() || !text.trim()) return;
+  // Fetch saved poems
+  useEffect(() => {
+    const fetchSavedPoems = async () => {
+      if (!user) return;
+      
+      const token = await user.getIdToken();
+      console.log("📜 Fetching Saved Poems with Token:", token);
 
-    setLoading(true);
-    try {
-      const res = await fetch("/api/poems", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ author, text }),
-      });
+      try {
+        const res = await fetch(`/api/users/${user.uid}/saved-poems`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-      if (!res.ok) throw new Error("Failed to post poem");
+        if (!res.ok) {
+          const errorData = await res.json();
+          console.error("❌ Failed to fetch saved poems:", errorData.error);
+          return;
+        }
 
-      const newPoem = await res.json();
-      setPoems([newPoem, ...poems]); // Add the new poem at the top
-      setAuthor("");
-      setText("");
-    } catch (err) {
-      console.error("Error posting poem:", err);
-      setError("Could not post your poem.");
-    } finally {
-      setLoading(false);
+        const data = await res.json();
+        console.log("✅ Saved Poems:", data);
+        setSavedPoems(data.map((poem: Poem) => poem.id)); // 🔹 Store only poem IDs
+      } catch (error) {
+        console.error("❌ Error fetching saved poems:", error);
+      }
+    };
+
+    fetchSavedPoems();
+  }, [user]);
+
+  // Handle saving a poem
+  const handleSavePoem = async (poemId: string) => {
+    if (!user) {
+      console.error("❌ No user is logged in.");
+      return;
+    }
+
+    const token = await user.getIdToken();
+    console.log("📜 Sending Token for Save:", token);
+
+    const res = await fetch(`/api/poems/${poemId}/save`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ user_id: user.uid }),
+    });
+
+    const data = await res.json();
+    console.log("🔍 Save API Response:", data);
+
+    if (!res.ok) {
+      console.error("❌ Failed to save poem:", data.error);
+    } else {
+      setSavedPoems([...savedPoems, poemId]); // 🔹 Add to saved list
     }
   };
 
@@ -67,49 +104,54 @@ export default function HomePage() {
       <h1 className="text-2xl font-bold mb-4 text-center">📜 Poem Reels</h1>
 
       {/* Poem Submission Form */}
-      <div className="mb-6 p-4 bg-white shadow-lg rounded-lg">
-        <h2 className="text-lg font-semibold mb-2">✍️ Post a Poem</h2>
-        
-        <Input
-          type="text"
-          placeholder="Your name..."
-          value={author}
-          onChange={(e) => setAuthor(e.target.value)}
-          className="mb-2"
-        />
-        
-        <Textarea
-          placeholder="Write your poem here..."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          className="mb-2"
-          rows={4}
-        />
-
-        <Button onClick={handlePostPoem} disabled={loading} className="w-full">
-          {loading ? "Posting..." : "Post Poem"}
-        </Button>
-        
-        {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-      </div>
-
-      {/* Poems List */}
-      {poems.length === 0 ? (
-        <p className="text-gray-500 text-center">No poems found. Be the first to post one!</p>
-      ) : (
-        <div className="space-y-4">
-          {poems.map((poem) => (
-            <Card key={poem.id} className="hover:shadow-lg transition">
-              <CardContent className="p-4">
-                <Link href={`/poem/${poem.id}`} className="block">
-                  <p className="text-lg font-medium line-clamp-2">{poem.text}</p>
-                </Link>
-                <p className="text-sm text-gray-500 mt-2">By {poem.author}</p>
-              </CardContent>
-            </Card>
-          ))}
+      {user && (
+        <div className="mb-6 p-4 bg-white shadow-lg rounded-lg">
+          <h2 className="text-lg font-semibold mb-2">✍️ Post a Poem</h2>
+          <Textarea
+            placeholder="Write your poem here..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="mb-2"
+            rows={4}
+          />
+          <Button onClick={() => console.log("🚀 Posting poem...")}>Post Poem</Button>
         </div>
       )}
+
+      {/* Poems List */}
+      <div className="space-y-4">
+        {poems.map((poem) => (
+          <Card key={poem.id} className="hover:shadow-lg transition">
+            <CardContent className="p-4">
+              <Link href={`/poem/${poem.id}`} className="block">
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]} 
+                  components={{
+                    p: ({ children }) => <p className="whitespace-pre-wrap">{children}</p>
+                  }}
+                >
+                  {poem.text.replace(/\\n/g, "\n")}
+                </ReactMarkdown>
+              </Link>
+              <p className="text-sm text-gray-500 mt-2">By {poem.author}</p>
+
+              {/* Like Button */}
+              <Button variant="outline" onClick={() => console.log("❤️ Like poem", poem.id)}>
+                ❤️ {poem.likes}
+              </Button>
+
+              {/* Save Button */}
+              <Button
+                variant={savedPoems.includes(poem.id) ? "default" : "outline"} // 🔹 Mark saved poems
+                onClick={() => handleSavePoem(poem.id)}
+                className="ml-2"
+              >
+                {savedPoems.includes(poem.id) ? "✅ Saved" : "💾 Save"}
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }
