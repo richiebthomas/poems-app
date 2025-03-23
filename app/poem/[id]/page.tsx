@@ -101,7 +101,26 @@ export default function PoemPage() {
         fetchData();
       }
     }, [id, user]);
-
+    const handleDelete = async () => {
+        if (!user || !poem) return;
+      
+        try {
+          const token = await user.getIdToken();
+          const res = await fetch(`/api/poems/${id}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+      
+          if (!res.ok) throw new Error("Failed to delete poem");
+      
+          toast.success("Poem deleted successfully");
+          router.push("/"); // Redirect to home after deletion
+        } catch (error) {
+          console.error("Error deleting poem:", error);
+          toast.error("Failed to delete poem");
+        }
+      };
+      
   // Updated handleLike with error handling
   const handleLike = async () => {
     if (!user || !poem) return;
@@ -222,11 +241,13 @@ export default function PoemPage() {
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
-      // You could add a toast notification here
+      toast.success("Page URL copied to clipboard");
     } catch (error) {
-      console.error("❌ Error sharing poem:", error);
+      console.error("❌ Error copying URL:", error);
+      toast.error("Failed to copy URL");
     }
   };
+  
 
   // Navigate back
   const handleBack = () => {
