@@ -1,5 +1,5 @@
 "use client";
-
+import "../globals.css";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/context/AuthContext";
@@ -439,9 +439,7 @@ export default function HomePage() {
         {!user && (
           <Card className="text-center p-6 mt-4">
             <p className="text-muted-foreground mb-4">Sign in to post your own poems or save your favorites</p>
-            <Button variant="default" asChild>
-              <Link href="/login">Sign In</Link>
-            </Button>
+            
           </Card>
         )}
       </div>
