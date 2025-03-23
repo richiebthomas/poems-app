@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
@@ -9,7 +8,6 @@ export default function LandingPage() {
   const { user } = useAuth();
   const router = useRouter();
 
-  // If the user is logged in, redirect to the home page.
   useEffect(() => {
     if (user) {
       router.push("/home");
@@ -17,22 +15,42 @@ export default function LandingPage() {
   }, [user, router]);
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-indigo-600 via-purple-500 to-pink-500 text-white">
-      <h1 className="text-6xl font-extrabold mb-6 text-center animate-fade-in">
-        Welcome to Vibe Quotes
-      </h1>
-      <p className="text-2xl mb-10 text-center max-w-lg">
-        Share your vibe with the world. Discover, create, and enjoy amazing quotes that inspire and connect.
-      </p>
-      <Button
-        onClick={() => router.push("/home")}
-        className="px-8 py-4 bg-white text-indigo-600 font-bold rounded-full shadow-xl transition-transform transform hover:scale-105 hover:bg-gray-100 animate-bounce"
-      >
-        Explore Now
-      </Button>
-      <footer className="mt-12 text-sm opacity-75">
-        Connect. Inspire. Share.
-      </footer>
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 relative overflow-hidden">
+      {/* Background Elements */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:6rem_4rem] opacity-10" />
+      
+      <div className="relative z-10 flex flex-col items-center justify-center px-4 sm:px-0">
+        <h1 className="text-5xl md:text-6xl font-bold text-slate-900 text-center mb-6">
+          Share Your <br />
+          <span className="bg-gradient-to-r from-rose-600 to-amber-600 bg-clip-text text-transparent">
+            Heartfelt Poems
+          </span>
+        </h1>
+
+        <p className="text-lg md:text-xl text-slate-600 text-center max-w-2xl mb-12">
+          A space for poets and dreamers. Write, share, and discover beautiful poems that inspire, heal, and connect souls.
+        </p>
+
+        <Button
+          onClick={() => router.push("/home")}
+          size="xl"
+          className="rounded-full px-8 py-6 text-lg font-semibold bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-700 hover:to-amber-700 transition-all text-white"
+        >
+          Start Sharing
+        </Button>
+
+        <footer className="mt-16 text-sm text-slate-500 font-medium flex items-center space-x-4">
+          <span>Write</span>
+          <span className="h-1 w-1 rounded-full bg-slate-400" />
+          <span>Share</span>
+          <span className="h-1 w-1 rounded-full bg-slate-400" />
+          <span>Inspire</span>
+        </footer>
+      </div>
+
+      {/* Animated Blobs */}
+      <div className="absolute -top-64 -right-64 w-[800px] h-[800px] bg-gradient-to-r from-rose-100/40 to-amber-100/40 rounded-full blur-3xl opacity-50" />
+      <div className="absolute -bottom-64 -left-64 w-[800px] h-[800px] bg-gradient-to-r from-rose-100/40 to-amber-100/40 rounded-full blur-3xl opacity-50" />
     </div>
   );
 }

@@ -3,12 +3,38 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
-import { ThumbsUp, Trash2, Bookmark } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { 
+  ThumbsUp, 
+  Trash2, 
+  Bookmark, 
+  Calendar, 
+  MessageSquare, 
+  Share, 
+  ArrowLeft,
+  Heart,
+  HeartOff
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { formatDistanceToNow } from "date-fns";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface Poem {
   id: string;
@@ -36,36 +62,44 @@ export default function PoemPage() {
   const [poem, setPoem] = useState<Poem | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch Poem & Comments
   useEffect(() => {
-    const fetchPoem = async () => {
+    const fetchData = async () => {
+      setIsLoading(true);
       try {
         const headers: HeadersInit = {};
         if (user) {
           const token = await user.getIdToken();
           headers["Authorization"] = `Bearer ${token}`;
         }
-        const res = await fetch(`/api/poems/${id}`, { headers });
-        const data = await res.json();
-        setPoem(data);
+        
+        // Fetch poem and comments in parallel
+        const [poemRes, commentsRes] = await Promise.all([
+          fetch(`/api/poems/${id}`, { headers }),
+        //   fetch(`/api/poems/${id}/comments`)
+        ]);
+        
+        if (!poemRes.ok) throw new Error("Failed to fetch poem");
+        // if (!commentsRes.ok) throw new Error("Failed to fetch comments");
+        
+        const poemData = await poemRes.json();
+        // const commentsData = await commentsRes.json();
+        
+        setPoem(poemData);
+        // setComments(commentsData);
       } catch (error) {
-        console.error("❌ Error fetching poem:", error);
+        console.error("❌ Error fetching data:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    const fetchComments = async () => {
-      try {
-        const res = await fetch(`/api/poems/${id}/comments`);
-        const data = await res.json();
-        setComments(data);
-      } catch (error) {
-        console.error("❌ Error fetching comments:", error);
-      }
-    };
-
-    fetchPoem();
-    fetchComments();
+    if (id) {
+      fetchData();
+    }
   }, [id, user]);
 
   // Handle Like/Unlike
@@ -130,6 +164,7 @@ export default function PoemPage() {
   const handleAddComment = async () => {
     if (!user || !newComment.trim()) return;
     try {
+      setIsSubmitting(true);
       const token = await user.getIdToken();
       const res = await fetch(`/api/poems/${id}/comments`, {
         method: "POST",
@@ -147,6 +182,8 @@ export default function PoemPage() {
       setNewComment("");
     } catch (error) {
       console.error("❌ Error adding comment:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -168,70 +205,233 @@ export default function PoemPage() {
     }
   };
 
-  if (!poem) return <p className="text-center mt-10">Loading poem...</p>;
+  // Share poem
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      // You could add a toast notification here
+    } catch (error) {
+      console.error("❌ Error sharing poem:", error);
+    }
+  };
+
+  // Navigate back
+  const handleBack = () => {
+    router.back();
+  };
+
+  if (isLoading) {
+    return (
+      <div className="max-w-2xl mx-auto p-6 space-y-6">
+        <Button variant="ghost" onClick={handleBack} className="mb-4">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back
+        </Button>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-3/4" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-4 w-full mb-2" />
+            <Skeleton className="h-4 w-full mb-2" />
+            <Skeleton className="h-4 w-3/4" />
+          </CardContent>
+          <CardFooter>
+            <Skeleton className="h-10 w-32 mr-2" />
+            <Skeleton className="h-10 w-32" />
+          </CardFooter>
+        </Card>
+        
+        <div>
+          <h2 className="text-lg font-semibold mb-4">💬 Comments</h2>
+          <Skeleton className="h-24 w-full mb-4" />
+          <Skeleton className="h-16 w-full mb-2" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!poem) return (
+    <div className="max-w-2xl mx-auto p-6 text-center">
+      <h2 className="text-xl font-semibold mb-4">Poem Not Found</h2>
+      <p className="mb-4">The poem you're looking for doesn't exist or has been removed.</p>
+      <Button onClick={() => router.push('/')}>Go Home</Button>
+    </div>
+  );
 
   return (
     <div className="max-w-2xl mx-auto p-6">
+      <Button variant="ghost" onClick={handleBack} className="mb-4">
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back
+      </Button>
+      
       {/* Poem Display */}
-      <Card className="mb-6">
-        <CardContent className="p-4">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{poem.text.replace(/\\n/g, "\n")}</ReactMarkdown>
-          <p className="text-sm text-gray-500 mt-2">By {poem.author}</p>
-
-          <div className="flex items-center space-x-2 mt-2">
-            {/* Like Button */}
-            <Button variant="outline" onClick={handleLike}>
-              <ThumbsUp className="w-4 h-4 mr-1" />
-              {poem.liked ? "Unlike" : "Like"} ({poem.likes})
-            </Button>
-
-            {/* Save Button */}
-            <Button variant={poem.saved_by_user ? "default" : "outline"} onClick={handleSave}>
-              <Bookmark className="w-4 h-4 mr-1" />
-              {poem.saved_by_user ? "Unsave" : "Save"}
-            </Button>
-
-            {/* Delete Button (only if user is the owner) */}
-            {user && user.uid === poem.user_id && (
-              <Button variant="destructive" onClick={handleDelete}>
-                <Trash2 className="w-4 h-4 mr-1" /> Delete
-              </Button>
-            )}
+      <Card className="mb-6 overflow-hidden">
+        <CardHeader className="pb-2">
+          <div className="flex items-center space-x-2">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${poem.author}`} alt={poem.author} />
+              <AvatarFallback>{poem.author[0]}</AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="text-sm font-medium">{poem.author}</p>
+              <p className="text-xs text-muted-foreground flex items-center">
+                <Calendar className="h-3 w-3 mr-1" />
+                {formatDistanceToNow(new Date(poem.created_at), { addSuffix: true })}
+              </p>
+            </div>
           </div>
+        </CardHeader>
+        
+        <CardContent className="pb-0 prose prose-sm max-w-none dark:prose-invert">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {poem.text.replace(/\\n/g, "\n")}
+          </ReactMarkdown>
         </CardContent>
+        
+        <CardFooter className="flex flex-wrap items-center gap-2 pt-4">
+          <Button 
+            variant={poem.liked ? "default" : "outline"} 
+            size="sm" 
+            onClick={handleLike}
+            className="flex items-center"
+          >
+            {poem.liked ? (
+              <Heart className="h-4 w-4 mr-1 fill-current" />
+            ) : (
+              <Heart className="h-4 w-4 mr-1" />
+            )}
+            <span>{poem.likes}</span>
+          </Button>
+
+          <Button 
+            variant={poem.saved_by_user ? "default" : "outline"} 
+            size="sm" 
+            onClick={handleSave}
+          >
+            <Bookmark className={`h-4 w-4 mr-1 ${poem.saved_by_user ? "fill-current" : ""}`} />
+            {poem.saved_by_user ? "Saved" : "Save"}
+          </Button>
+
+          <Button variant="outline" size="sm" onClick={handleShare}>
+            <Share className="h-4 w-4 mr-1" />
+            Share
+          </Button>
+
+          {user && user.uid === poem.user_id && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="h-4 w-4 mr-1" /> Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete your poem and remove it from our servers.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </CardFooter>
       </Card>
 
       {/* Comment Section */}
       <div className="mt-6">
-        <h2 className="text-lg font-semibold mb-2">💬 Comments</h2>
-        {user && (
-          <div className="mb-4">
+        <div className="flex items-center mb-4">
+          <MessageSquare className="h-5 w-5 mr-2" />
+          <h2 className="text-lg font-semibold">Comments</h2>
+          <Badge variant="outline" className="ml-2">{comments.length}</Badge>
+        </div>
+        
+        {user ? (
+          <div className="mb-6">
             <Textarea
-              placeholder="Write a comment..."
+              placeholder="Add your thoughts..."
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
               rows={3}
+              className="mb-2"
             />
-            <Button className="mt-2" onClick={handleAddComment}>
-              Post Comment
+            <Button 
+              onClick={handleAddComment} 
+              disabled={!newComment.trim() || isSubmitting}
+            >
+              {isSubmitting ? "Posting..." : "Post Comment"}
             </Button>
           </div>
+        ) : (
+          <Card className="mb-6 bg-muted/50">
+            <CardContent className="p-4 text-center">
+              <p className="text-sm">Sign in to leave a comment</p>
+            </CardContent>
+          </Card>
         )}
-        <div className="space-y-4">
-          {comments.map((comment) => (
-            <Card key={comment.id}>
-              <CardContent className="p-4">
-                <p>{comment.text}</p>
-                <p className="text-sm text-gray-500">By {comment.author}</p>
-                {user && user.uid === comment.user_id && (
-                  <Button variant="destructive" onClick={() => handleDeleteComment(comment.id)}>
-                    <Trash2 className="w-4 h-4 mr-1" /> Delete
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        
+        {comments.length > 0 ? (
+          <div className="space-y-4">
+            {comments.map((comment) => (
+              <Card key={comment.id} className="overflow-hidden">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${comment.author}`} alt={comment.author} />
+                        <AvatarFallback>{comment.author[0]}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-medium">{comment.author}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {user && user.uid === comment.user_id && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete comment?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteComment(comment.id)}>
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                  
+                  <Separator className="my-2" />
+                  
+                  <p className="text-sm mt-2">{comment.text}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="bg-muted/50">
+            <CardContent className="p-4 text-center">
+              <p className="text-sm text-muted-foreground">No comments yet. Be the first to share your thoughts!</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
