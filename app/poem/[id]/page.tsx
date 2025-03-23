@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { 
   ThumbsUp, 
   Trash2, 
@@ -296,9 +297,15 @@ export default function PoemPage() {
         </CardHeader>
         
         <CardContent className="pb-0 prose prose-sm max-w-none dark:prose-invert">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {poem.text.replace(/\\n/g, "\n")}
-          </ReactMarkdown>
+        <ReactMarkdown
+  remarkPlugins={[remarkGfm]}
+  components={{
+    p: ({ children }) => <p className="whitespace-pre-wrap">{children}</p>,
+  }}
+>
+  {poem.text.replace(/\\n/g, "\n")}
+</ReactMarkdown>
+
         </CardContent>
         
         <CardFooter className="flex flex-wrap items-center gap-2 pt-4">
