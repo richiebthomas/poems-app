@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ThumbsUp, Bookmark } from "lucide-react";
 
 interface Poem {
   id: string;
@@ -15,19 +16,27 @@ interface Poem {
   author: string;
   user_id: string;
   likes: number;
+  liked: boolean;        // true if current user liked this poem
+  saved_by_user: boolean;  // true if current user saved this poem
+  created_at: string;
 }
 
 export default function HomePage() {
   const { user } = useAuth();
   const [poems, setPoems] = useState<Poem[]>([]);
-  const [savedPoems, setSavedPoems] = useState<string[]>([]); // 🔹 Store saved poem IDs
   const [text, setText] = useState("");
+  const [posting, setPosting] = useState(false);
 
-  // Fetch all poems
+  // Fetch all poems, including like/save counts and user's liked/saved flags
   useEffect(() => {
     const fetchPoems = async () => {
       try {
-        const res = await fetch("/api/poems");
+        const headers: HeadersInit = {};
+        if (user) {
+          const token = await user.getIdToken();
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        const res = await fetch("/api/poems", { headers });
         const data = await res.json();
         console.log("📜 Fetched Poems:", data);
         setPoems(data);
@@ -36,66 +45,107 @@ export default function HomePage() {
       }
     };
     fetchPoems();
-  }, []);
-
-  // Fetch saved poems
-  useEffect(() => {
-    const fetchSavedPoems = async () => {
-      if (!user) return;
-      
-      const token = await user.getIdToken();
-      console.log("📜 Fetching Saved Poems with Token:", token);
-
-      try {
-        const res = await fetch(`/api/users/${user.uid}/saved-poems`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!res.ok) {
-          const errorData = await res.json();
-          console.error("❌ Failed to fetch saved poems:", errorData.error);
-          return;
-        }
-
-        const data = await res.json();
-        console.log("✅ Saved Poems:", data);
-        setSavedPoems(data.map((poem: Poem) => poem.id)); // 🔹 Store only poem IDs
-      } catch (error) {
-        console.error("❌ Error fetching saved poems:", error);
-      }
-    };
-
-    fetchSavedPoems();
   }, [user]);
 
-  // Handle saving a poem
-  const handleSavePoem = async (poemId: string) => {
-    if (!user) {
-      console.error("❌ No user is logged in.");
-      return;
+  // Handle posting a new poem
+  const handlePostPoem = async () => {
+    if (!text.trim() || !user) return;
+
+    setPosting(true);
+    try {
+      const token = await user.getIdToken();
+      const requestBody = {
+        text: text.trim().replace(/\n/g, "\\n"),
+        author: user.displayName || "Anonymous",
+        user_id: user.uid,
+      };
+
+      console.log("📤 Sending Poem Request:", requestBody);
+
+      const res = await fetch("/api/poems", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const data = await res.json();
+      console.log("🔍 Post Poem Response:", data);
+      if (!res.ok) throw new Error(data.error);
+      setPoems((prev) => [data, ...prev]);
+      setText("");
+    } catch (error) {
+      console.error("❌ Error posting poem:", error);
+    } finally {
+      setPosting(false);
     }
+  };
 
-    const token = await user.getIdToken();
-    console.log("📜 Sending Token for Save:", token);
+  // Handle liking/unliking a poem
+  const handleLikePoem = async (poemId: string, currentlyLiked: boolean) => {
+    if (!user) return;
 
-    const res = await fetch(`/api/poems/${poemId}/save`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ user_id: user.uid }),
-    });
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/poems/${poemId}/like`, {
+        method: currentlyLiked ? "DELETE" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        // For liking/unliking, send user_id
+        body: JSON.stringify({ user_id: user.uid }),
+      });
+      const data = await res.json();
+      console.log("🔍 Like API Response:", data);
+      if (!res.ok) throw new Error(data.error);
+      // Update the poem's like count and liked flag
+      setPoems((prevPoems) =>
+        prevPoems.map((poem) =>
+          poem.id === poemId
+            ? {
+                ...poem,
+                likes: currentlyLiked ? poem.likes - 1 : poem.likes + 1,
+                liked: !currentlyLiked,
+              }
+            : poem
+        )
+      );
+    } catch (error) {
+      console.error("❌ Error liking/unliking poem:", error);
+    }
+  };
 
-    const data = await res.json();
-    console.log("🔍 Save API Response:", data);
+  // Handle saving/unsaving a poem
+  const handleSavePoem = async (poemId: string, currentlySaved: boolean) => {
+    if (!user) return;
 
-    if (!res.ok) {
-      console.error("❌ Failed to save poem:", data.error);
-    } else {
-      setSavedPoems([...savedPoems, poemId]); // 🔹 Add to saved list
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/poems/${poemId}/save`, {
+        method: currentlySaved ? "DELETE" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        // For saving/unsaving, send user_id (or user_uid if your API expects that key)
+        body: JSON.stringify({ user_id: user.uid }),
+      });
+      const data = await res.json();
+      console.log("🔍 Save API Response:", data);
+      if (!res.ok) throw new Error(data.error);
+      // Update the poem's saved flag by refetching or toggling state
+      setPoems((prevPoems) =>
+        prevPoems.map((poem) =>
+          poem.id === poemId
+            ? { ...poem, saved_by_user: !currentlySaved }
+            : poem
+        )
+      );
+    } catch (error) {
+      console.error("❌ Error saving poem:", error);
     }
   };
 
@@ -114,7 +164,9 @@ export default function HomePage() {
             className="mb-2"
             rows={4}
           />
-          <Button onClick={() => console.log("🚀 Posting poem...")}>Post Poem</Button>
+          <Button onClick={handlePostPoem} disabled={posting || !text.trim()}>
+            {posting ? "Posting..." : "Post Poem"}
+          </Button>
         </div>
       )}
 
@@ -124,10 +176,10 @@ export default function HomePage() {
           <Card key={poem.id} className="hover:shadow-lg transition">
             <CardContent className="p-4">
               <Link href={`/poem/${poem.id}`} className="block">
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm]} 
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
                   components={{
-                    p: ({ children }) => <p className="whitespace-pre-wrap">{children}</p>
+                    p: ({ children }) => <p className="whitespace-pre-wrap">{children}</p>,
                   }}
                 >
                   {poem.text.replace(/\\n/g, "\n")}
@@ -136,17 +188,20 @@ export default function HomePage() {
               <p className="text-sm text-gray-500 mt-2">By {poem.author}</p>
 
               {/* Like Button */}
-              <Button variant="outline" onClick={() => console.log("❤️ Like poem", poem.id)}>
-                ❤️ {poem.likes}
+              <Button
+                variant="outline"
+                onClick={() => handleLikePoem(poem.id, poem.liked)}
+              >
+                {poem.liked ? " ❤︎" : "♡"} {poem.likes}
               </Button>
 
               {/* Save Button */}
               <Button
-                variant={savedPoems.includes(poem.id) ? "default" : "outline"} // 🔹 Mark saved poems
-                onClick={() => handleSavePoem(poem.id)}
+                variant={poem.saved_by_user ? "default" : "outline"}
+                onClick={() => handleSavePoem(poem.id, poem.saved_by_user)}
                 className="ml-2"
               >
-                {savedPoems.includes(poem.id) ? "✅ Saved" : "💾 Save"}
+                {poem.saved_by_user ? "✅ Saved" : "💾 Save"}
               </Button>
             </CardContent>
           </Card>
