@@ -34,7 +34,7 @@ export default function Navbar() {
 
   return (
     <nav className="flex justify-between items-center p-4 border-b">
-      <h1 className="text-lg font-bold">Poem Reels</h1>
+      <h1 className="text-lg font-bold">Vibe Quotes</h1>
       {user ? (
         <Button onClick={handleLogout}>Logout</Button>
       ) : (
