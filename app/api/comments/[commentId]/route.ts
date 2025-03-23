@@ -1,21 +1,45 @@
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
-
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is not defined in environment variables!");
-}
+import admin from "@/app/lib/firebaseAdmin";
 
 const sql = neon(process.env.DATABASE_URL!);
 
-export async function DELETE(req: Request, { params }: { params: { commentId: string } }) {
+export async function DELETE(
+  req: Request,
+  { params }: { params: { commentId: string } }
+) {
   try {
-    const { commentId } = params;
-    await sql`
-      DELETE FROM comments WHERE id = ${commentId}
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    const userId = decodedToken.uid;
+
+    // Fetch comment to check ownership
+    const comment = await sql`
+      SELECT user_id FROM comments WHERE id = ${params.commentId}
     `;
-    return NextResponse.json({ success: true, message: "Comment deleted" }, { status: 200 });
-  } catch (error: any) {
-    console.error("Error deleting comment:", error.message);
-    return NextResponse.json({ error: "Failed to delete comment", details: error.message }, { status: 500 });
+
+    if (comment.length === 0) {
+      return NextResponse.json({ error: "Comment not found" }, { status: 404 });
+    }
+
+    if (comment[0].user_id !== userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Delete comment
+    await sql`DELETE FROM comments WHERE id = ${params.commentId}`;
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("❌ Error deleting comment:", error);
+    return NextResponse.json(
+      { error: "Failed to delete comment" },
+      { status: 500 }
+    );
   }
 }

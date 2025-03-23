@@ -40,7 +40,18 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   return NextResponse.json(newComment);
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string; commentId: string } }) {
-  await sql`DELETE FROM comments WHERE id = ${params.commentId}`;
-  return NextResponse.json({ success: true });
+export async function DELETE(
+  req: Request,
+  { params }: { params: { id: string; commentId: string } }
+) {
+  try {
+    await sql`DELETE FROM comments WHERE id = ${params.commentId}`;
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting comment:", error);
+    return NextResponse.json(
+      { error: "Failed to delete comment" },
+      { status: 500 }
+    );
+  }
 }

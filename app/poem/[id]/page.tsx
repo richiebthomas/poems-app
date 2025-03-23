@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/app/context/AuthContext";
@@ -37,75 +36,83 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface Poem {
-  id: string;
-  text: string;
-  author: string;
-  user_id: string;
-  likes: number;
-  liked: boolean;
-  saved_by_user: boolean;
-  created_at: string;
-}
-
-interface Comment {
-  id: string;
-  text: string;
-  user_id: string;
-  author: string;
-  created_at: string;
-}
+    id: string;
+    text: string;
+    author: string;
+    user_id: string;
+    likes: number;
+    liked: boolean;
+    saved_by_user: boolean;
+    created_at: string;
+  }
+  
+  interface Comment {
+    id: string;
+    text: string;
+    user_id: string;
+    author: string;
+    created_at: string;
+  }
 
 export default function PoemPage() {
-  const { id } = useParams();
-  const router = useRouter();
-  const { user } = useAuth();
-  const [poem, setPoem] = useState<Poem | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [newComment, setNewComment] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Fetch Poem & Comments
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const headers: HeadersInit = {};
-        if (user) {
-          const token = await user.getIdToken();
-          headers["Authorization"] = `Bearer ${token}`;
+    const { id } = useParams();
+    const router = useRouter();
+    const { user } = useAuth();
+    const [poem, setPoem] = useState<Poem | null>(null);
+    const [comments, setComments] = useState<Comment[]>([]);
+    const [newComment, setNewComment] = useState("");
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+  
+    // Fetch Poem & Comments
+    useEffect(() => {
+      const fetchData = async () => {
+        setIsLoading(true);
+        try {
+          const headers: HeadersInit = {};
+          if (user) {
+            const token = await user.getIdToken();
+            headers["Authorization"] = `Bearer ${token}`;
+          }
+          
+          // Fetch poem and comments in parallel
+          const [poemRes, commentsRes] = await Promise.all([
+            fetch(`/api/poems/${id}`, { headers }),
+            fetch(`/api/poems/${id}/comments`)
+          ]);
+          
+          if (!poemRes.ok) throw new Error("Failed to fetch poem");
+          if (!commentsRes.ok) throw new Error("Failed to fetch comments");
+          
+          const poemData = await poemRes.json();
+          const commentsData = await commentsRes.json();
+          
+          setPoem(poemData);
+          setComments(commentsData);
+        } catch (error) {
+          console.error("❌ Error fetching data:", error);
+        } finally {
+          setIsLoading(false);
         }
-        
-        // Fetch poem and comments in parallel
-        const [poemRes, commentsRes] = await Promise.all([
-          fetch(`/api/poems/${id}`, { headers }),
-        //   fetch(`/api/poems/${id}/comments`)
-        ]);
-        
-        if (!poemRes.ok) throw new Error("Failed to fetch poem");
-        // if (!commentsRes.ok) throw new Error("Failed to fetch comments");
-        
-        const poemData = await poemRes.json();
-        // const commentsData = await commentsRes.json();
-        
-        setPoem(poemData);
-        // setComments(commentsData);
-      } catch (error) {
-        console.error("❌ Error fetching data:", error);
-      } finally {
-        setIsLoading(false);
+      };
+  
+      if (id) {
+        fetchData();
       }
-    };
+    }, [id, user]);
 
-    if (id) {
-      fetchData();
-    }
-  }, [id, user]);
-
-  // Handle Like/Unlike
+  // Updated handleLike with error handling
   const handleLike = async () => {
     if (!user || !poem) return;
+    
     try {
+      // Optimistic update
+      setPoem(prev => prev ? {
+        ...prev,
+        liked: !prev.liked,
+        likes: prev.liked ? prev.likes - 1 : prev.likes + 1
+      } : null);
+
       const token = await user.getIdToken();
       const method = poem.liked ? "DELETE" : "POST";
       const res = await fetch(`/api/poems/${id}/like`, {
@@ -114,19 +121,28 @@ export default function PoemPage() {
       });
 
       if (!res.ok) throw new Error("Failed to like/unlike poem");
-
-      setPoem((prev) =>
-        prev ? { ...prev, liked: !prev.liked, likes: prev.liked ? prev.likes - 1 : prev.likes + 1 } : prev
-      );
     } catch (error) {
-      console.error("❌ Error liking poem:", error);
+      // Revert on error
+      setPoem(prev => prev ? {
+        ...prev,
+        liked: poem.liked,
+        likes: poem.likes
+      } : null);
+      toast.error("Failed to update like status");
     }
   };
 
-  // Handle Save/Unsave
+  // Updated handleSave with error handling
   const handleSave = async () => {
     if (!user || !poem) return;
+    
     try {
+      // Optimistic update
+      setPoem(prev => prev ? { 
+        ...prev, 
+        saved_by_user: !prev.saved_by_user 
+      } : null);
+
       const token = await user.getIdToken();
       const method = poem.saved_by_user ? "DELETE" : "POST";
       const res = await fetch(`/api/poems/${id}/save`, {
@@ -135,34 +151,24 @@ export default function PoemPage() {
       });
 
       if (!res.ok) throw new Error("Failed to save/unsave poem");
-
-      setPoem((prev) => (prev ? { ...prev, saved_by_user: !prev.saved_by_user } : prev));
+      
+      toast.success(poem.saved_by_user 
+        ? "Removed from saved" 
+        : "Added to saved poems");
     } catch (error) {
-      console.error("❌ Error saving poem:", error);
+      // Revert on error
+      setPoem(prev => prev ? { 
+        ...prev, 
+        saved_by_user: poem.saved_by_user 
+      } : null);
+      toast.error("Failed to update save status");
     }
   };
 
-  // Handle Delete Poem
-  const handleDelete = async () => {
-    if (!user || !poem || user.uid !== poem.user_id) return;
-    try {
-      const token = await user.getIdToken();
-      const res = await fetch(`/api/poems/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) throw new Error("Failed to delete poem");
-
-      router.push("/");
-    } catch (error) {
-      console.error("❌ Error deleting poem:", error);
-    }
-  };
-
-  // Handle Adding Comment
+  // Updated handleAddComment with better error handling
   const handleAddComment = async () => {
     if (!user || !newComment.trim()) return;
+    
     try {
       setIsSubmitting(true);
       const token = await user.getIdToken();
@@ -178,30 +184,36 @@ export default function PoemPage() {
       if (!res.ok) throw new Error("Failed to add comment");
 
       const newCommentData = await res.json();
-      setComments((prev) => [...prev, newCommentData]);
+      setComments(prev => [...prev, newCommentData]);
       setNewComment("");
+      toast.success("Comment added successfully");
     } catch (error) {
-      console.error("❌ Error adding comment:", error);
+      console.error("Error adding comment:", error);
+      toast.error("Failed to add comment");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Handle Deleting Comment
+  // Updated handleDeleteComment with error handling
   const handleDeleteComment = async (commentId: string) => {
     if (!user) return;
+    
     try {
       const token = await user.getIdToken();
-      const res = await fetch(`/api/poems/${id}/comments/${commentId}`, {
+      const res = await fetch(`/api/comments/${commentId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
+      
 
       if (!res.ok) throw new Error("Failed to delete comment");
 
-      setComments((prev) => prev.filter((comment) => comment.id !== commentId));
+      setComments(prev => prev.filter(c => c.id !== commentId));
+      toast.success("Comment deleted successfully");
     } catch (error) {
-      console.error("❌ Error deleting comment:", error);
+      console.error("Error deleting comment:", error);
+      toast.error("Failed to delete comment");
     }
   };
 
