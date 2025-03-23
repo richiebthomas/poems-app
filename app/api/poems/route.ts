@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
-import admin from "@/app/lib/firebaseAdmin"; // Adjust path if needed
+import admin from "@/app/lib/firebaseAdmin"; // Adjust the path if necessary
 import { v4 as uuidv4 } from "uuid";
 
 if (!process.env.DATABASE_URL) {
@@ -27,8 +27,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    // Query poems and join with a subquery to get the like count.
-    // Use subqueries to determine whether the current user has liked or saved each poem.
+    // Query poems with total likes and flag if the current user liked or saved them
     const poems = await sql`
       SELECT 
         poems.id,
@@ -105,6 +104,7 @@ export async function POST(req: Request) {
     };
 
     console.log("📝 Inserting Poem:", newPoem);
+
     await sql`
       INSERT INTO poems (id, text, author, user_id, created_at)
       VALUES (${newPoem.id}, ${newPoem.text}, ${newPoem.author}, ${newPoem.user_id}, ${newPoem.created_at})
@@ -114,5 +114,42 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("❌ Error posting poem:", error.message);
     return NextResponse.json({ error: "Failed to post poem", details: error.message }, { status: 500 });
+  }
+}
+
+//
+// DELETE: Delete a poem (only if it belongs to the current user)
+//
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  try {
+    const { id } = params;
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const token = authHeader.split(" ")[1];
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    const currentUserId = decodedToken.uid;
+
+    // Fetch the poem to verify ownership
+    const poemRecord = await sql`
+      SELECT * FROM poems WHERE id = ${id}
+    `;
+    if (!poemRecord || poemRecord.length === 0) {
+      return NextResponse.json({ error: "Poem not found" }, { status: 404 });
+    }
+    const poem = poemRecord[0];
+    if (poem.user_id !== currentUserId) {
+      return NextResponse.json({ error: "Unauthorized: You cannot delete someone else's poem" }, { status: 403 });
+    }
+
+    // Delete the poem (this should cascade delete likes and saved entries if foreign keys are set)
+    await sql`
+      DELETE FROM poems WHERE id = ${id}
+    `;
+    return NextResponse.json({ success: true, message: "Poem deleted" }, { status: 200 });
+  } catch (error: any) {
+    console.error("❌ Error deleting poem:", error.message);
+    return NextResponse.json({ error: "Failed to delete poem", details: error.message }, { status: 500 });
   }
 }
