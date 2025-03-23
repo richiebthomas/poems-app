@@ -33,7 +33,7 @@ export default function LandingPage() {
 
         <Button
           onClick={() => router.push("/home")}
-          size="xl"
+          size="lg"
           className="rounded-full px-8 py-6 text-lg font-semibold bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-700 hover:to-amber-700 transition-all text-white"
         >
           Start Sharing
