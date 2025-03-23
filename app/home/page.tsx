@@ -176,7 +176,7 @@ export default function HomePage() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4 text-center">📜 Poem Reels</h1>
+      <h1 className="text-2xl font-bold mb-4 text-center">Dive into the rhythm, your poetic journey awaits.</h1>
 
       {/* Tab Navigation */}
       <div className="flex justify-center gap-4 mb-4">
