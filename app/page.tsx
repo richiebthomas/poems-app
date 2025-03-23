@@ -17,7 +17,7 @@ export default function LandingPage() {
   }, [user, router]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-600 via-purple-500 to-pink-500 text-white">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-indigo-600 via-purple-500 to-pink-500 text-white">
       <h1 className="text-6xl font-extrabold mb-6 text-center animate-fade-in">
         Welcome to Vibe Quotes
       </h1>
